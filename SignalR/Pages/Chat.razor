@@ -1,0 +1,65 @@
+﻿@page "/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+
+<h3>Chat</h3>
+
+<div>
+    <input @bind="userInput" placeholder="Your name" />
+    <br />
+    <textarea @bind="messageInput" placeholder="Your message"></textarea>
+    <br />
+    <button @onclick="SendMessage">Send</button>
+</div>
+
+<ul>
+    @foreach (var message in messages)
+    {
+            <li><b>@message.User:</b> @message.Messages</li>
+    }
+</ul>
+
+@code {
+    private HubConnection hubConnection;
+    private string userInput;
+    private string messageInput;
+    private List<Message> messages = new List<Message>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            var encodedMsg = new Message { User = user, Messages = message };
+            messages.Add(encodedMsg);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrEmpty(userInput) && !string.IsNullOrEmpty(messageInput))
+        {
+            await hubConnection.SendAsync("SendMessage", userInput, messageInput);
+            messageInput = string.Empty;
+        }
+    }
+
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+
+    public async ValueTask DisposeAsync()
+    {
+        await hubConnection.DisposeAsync();
+    }
+
+    private class Message
+    {
+        public string User { get; set; }
+        public string Messages { get; set; }
+    }
+}
